@@ -5,32 +5,43 @@
 Es una GUI para **`yt-dlp`** y **`ffmpeg`** hecha con **`Python`**. Sirve para descargar videos y/o recodificar videos tanto al descargar como al importar archivos locales en el mismo programa. Lo pensé para editores de video, principalmente para **Adobe Premiere Pro**.
 
 <div align="center">
-  <img width="300" height="451" alt="DowP Interface 1" src="https://github.com/user-attachments/assets/64227026-4731-4985-bc30-dcbb1937cf0e"/>
-  <img width="300" height="451" alt="DowP Interface 2" src="https://github.com/user-attachments/assets/f04c45a3-2882-41d2-8576-9f0ab23a28a0" />
-  <img width="300" height="451" alt="DowP Interface 3" src="https://github.com/user-attachments/assets/48b0f02c-1f9c-48cd-8f26-74270affd9e8" />
+<img width="300" height="451" alt="Captura de pantalla 2025-09-28 a la(s) 5 26 21 p m" src="https://github.com/user-attachments/assets/8d194a5e-2707-46c2-a613-f846250fcd3c" />
+<img width="300" height="451" alt="Captura de pantalla 2025-09-28 a la(s) 5 25 27 p m" src="https://github.com/user-attachments/assets/5b097ab2-7848-4235-9148-daa4d0c0fc45" />
+<img width="300" height="451" alt="Captura de pantalla 2025-09-28 a la(s) 5 24 47 p m" src="https://github.com/user-attachments/assets/1c6d6b43-78d9-457c-a80a-a565f05098ad" />
+
 </div>
+
 
 ## Instalación
 
 ### Requisitos previos
-- [Python](https://www.python.org/downloads/) - **IMPORTANTE**: Marcar las casillas para poner Python en el PATH del sistema. Para verificar la instalación, abre CMD/Terminal y ejecuta:
+- [Python 3.11](https://www.python.org/downloads/release/python-3119/) (Recomendado para evitar problemas de compatibilidad) - **IMPORTANTE**: Marcar las casillas para poner Python en el PATH del sistema. Para verificar la instalación, abre CMD/Terminal y ejecuta:
   ```bash
   python --version
   ```
   Debe devolver la versión instalada.
 
+#### Requisitos adicionales para macOS
+- **Homebrew**: Necesario para instalar FFmpeg
+  ```bash
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  ```
+- **FFmpeg** (para macOS):
+  ```bash
+  brew install ffmpeg
+  ```
+
 ### Pasos
-1. **Instalación automática**: Solo abre `main.py` o ejecuta `run_dowp.bat` y se encargará de descargar e instalar las dependencias y todo lo necesario.
+1. **Instalación automática**: Solo abre `main.py` o ejecuta `DowP.dmg` (App Ejecutable) y se encargará de descargar e instalar las dependencias y todo lo necesario.
 
 2. **Instalación manual** (si la automática falla):
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **FFmpeg**: Se instala automáticamente con `main.py`. Si no funciona, instálalo manualmente:
-   - Descarga [FFmpeg](https://www.gyan.dev/ffmpeg/builds/)
-   - Instálalo en el **PATH** de tu sistema, o
-   - Copia la carpeta `bin` a la carpeta del script
+3. **FFmpeg**: 
+   - **macOS**: Usar Homebrew (ver requisitos adicionales arriba)
+
 ## Características Principales
 
 DowP cuenta con dos modos principales: **Modo URL** y **Recodificación Local**. Las opciones de recodificación son las mismas en ambos casos.
