@@ -7,146 +7,150 @@ import tarfile
 import zipfile
 import requests
 
+# --- CONSTANTES DEL PROYECTO ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 BIN_DIR = os.path.join(PROJECT_ROOT, "bin")
 FFMPEG_VERSION_FILE = os.path.join(BIN_DIR, "ffmpeg_version.txt")
 
+
+# --- FUNCIÓN 1: VERIFICAR DEPENDENCIAS DE PYTHON ---
 def check_and_install_python_dependencies(progress_callback):
-    """Verifica e instala dependencias de Python, reportando el progreso."""
+    """Verifica e instala dependencias de Python desde requirements.txt."""
     progress_callback("Verificando dependencias de Python...", 5)
     try:
-        import customtkinter
-        import PIL
-        import requests
-        import yt_dlp
+        import customtkinter, PIL, requests, yt_dlp
         progress_callback("Dependencias de Python verificadas.", 15)
         return True
     except ImportError:
         progress_callback("Instalando dependencias necesarias...", 10)
-    requirements_path = os.path.join(PROJECT_ROOT, "requirements.txt")
-    if not os.path.exists(requirements_path):
-        progress_callback("ERROR: No se encontró 'requirements.txt'.", -1)
-        return False
-    try:
-        process = subprocess.Popen(
-            [sys.executable, "-m", "pip", "install", "-r", requirements_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding='utf-8'
-        )
-        stdout, stderr = process.communicate()
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, process.args, output=stdout, stderr=stderr)
-        progress_callback("Dependencias instaladas.", 15)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"ERROR: Falló la instalación de dependencias con pip: {e.stderr}")
-        progress_callback(f"Error al instalar dependencias.", -1)
-        return False
+        requirements_path = os.path.join(PROJECT_ROOT, "requirements.txt")
+        if not os.path.exists(requirements_path):
+            progress_callback("ERROR: No se encontró 'requirements.txt'.", -1)
+            return False
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "-r", requirements_path],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            progress_callback("Dependencias instaladas.", 15)
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"ERROR: Falló la instalación de dependencias con pip: {e}")
+            progress_callback("Error al instalar dependencias.", -1)
+            return False
 
+# --- FUNCIÓN 2: OBTENER INFO DE ÚLTIMA VERSIÓN DE FFMPEG ---
 def get_latest_ffmpeg_info(progress_callback):
-    """Consulta la API de GitHub para la última versión de FFMPEG."""
+    """Consulta la API de GitHub para la última versión de FFmpeg."""
     progress_callback("Consultando la última versión de FFmpeg...", 5)
     try:
-        api_url = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases"
+        api_url = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest"
         response = requests.get(api_url, timeout=15)
         response.raise_for_status()
-        releases = response.json()
-        latest_release_data = next((r for r in releases if r['tag_name'] != 'latest'), None)
-        if not latest_release_data:
-            return None, None
+        latest_release_data = response.json()
         tag_name = latest_release_data["tag_name"]
+        
         system = platform.system()
-        file_identifier = ""
         if system == "Windows": file_identifier = "win64-gpl.zip"
         elif system == "Linux": file_identifier = "linux64-gpl.tar.xz"
         elif system == "Darwin": file_identifier = "osx64-gpl.zip"
         else: return None, None
+
         for asset in latest_release_data["assets"]:
             if file_identifier in asset["name"] and "shared" not in asset["name"]:
                 progress_callback("Información de FFmpeg encontrada.", 10)
                 return tag_name, asset["browser_download_url"]
         return tag_name, None
     except requests.RequestException as e:
-        progress_callback(f"Error de red al buscar FFmpeg: {e}", -1)
-        return None, None
-    except (IndexError, KeyError) as e:
-        progress_callback(f"Error en respuesta de API de FFmpeg: {e}", -1)
+        progress_callback(f"Error de red al buscar FFmpeg.", -1)
+        print(f"DEBUG: Error de red: {e}")
         return None, None
 
-def download_and_install_ffmpeg(tag, url, progress_callback):
-    """Descarga e instala FFMPEG, reportando el progreso de forma optimizada."""
+# --- FUNCIÓN 3: DESCARGAR E INSTALAR FFMPEG ---
+def download_and_install_ffmpeg(version, url, progress_callback):
+    """Descarga, extrae e instala FFmpeg en el directorio bin."""
+    if not os.path.exists(BIN_DIR):
+        os.makedirs(BIN_DIR)
+    
+    is_zip = url.endswith(".zip")
+    ext = ".zip" if is_zip else ".tar.xz"
+    download_path = os.path.join(PROJECT_ROOT, f"ffmpeg-temp{ext}")
+    temp_extract_path = os.path.join(PROJECT_ROOT, "ffmpeg-extracted")
+
     try:
-        file_name = url.split('/')[-1]
-        archive_name = os.path.join(PROJECT_ROOT, file_name)
-        last_reported_progress = -1
-        with requests.get(url, stream=True, timeout=120) as r:
+        progress_callback("Descargando FFmpeg...", 50)
+        with requests.get(url, stream=True, timeout=30) as r:
             r.raise_for_status()
-            total_size = int(r.headers.get('content-length', 0))
-            downloaded_size = 0
-            with open(archive_name, 'wb') as f:
+            with open(download_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
-                    if not chunk:
-                        continue
                     f.write(chunk)
-                    downloaded_size += len(chunk)
-                    if total_size > 0:
-                        progress = 40 + (downloaded_size / total_size) * 40
-                        if int(progress) > last_reported_progress:
-                            progress_callback(f"Descargando FFmpeg: {downloaded_size / 1024 / 1024:.1f}/{total_size / 1024 / 1024:.1f} MB", progress)
-                            last_reported_progress = int(progress)
-        progress_callback("Extrayendo archivos de FFmpeg...", 85)
-        temp_extract_path = os.path.join(PROJECT_ROOT, "ffmpeg_temp_extract")
-        if os.path.exists(temp_extract_path): shutil.rmtree(temp_extract_path)
-        if archive_name.endswith(".zip"):
-            with zipfile.ZipFile(archive_name, 'r') as zip_ref: zip_ref.extractall(temp_extract_path)
-        else:
-            with tarfile.open(archive_name, 'r:xz') as tar_ref: tar_ref.extractall(temp_extract_path)
-        os.makedirs(BIN_DIR, exist_ok=True)
-        bin_content_path = os.path.join(temp_extract_path, os.listdir(temp_extract_path)[0], 'bin')
-        for item in os.listdir(bin_content_path):
-            dest_path = os.path.join(BIN_DIR, item)
-            if os.path.exists(dest_path): os.remove(dest_path)
-            shutil.move(os.path.join(bin_content_path, item), dest_path)
-        shutil.rmtree(temp_extract_path)
-        os.remove(archive_name)
-        with open(FFMPEG_VERSION_FILE, "w") as f: f.write(tag)
-        progress_callback(f"FFmpeg {tag} instalado.", 95)
-        return True
-    except Exception as e:
-        progress_callback(f"Error al instalar FFmpeg: {e}", -1)
-        return False
 
+        progress_callback("Extrayendo archivos...", 85)
+        if os.path.exists(temp_extract_path): shutil.rmtree(temp_extract_path)
+        os.makedirs(temp_extract_path)
+        
+        if is_zip:
+            with zipfile.ZipFile(download_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_extract_path)
+        else:
+            with tarfile.open(download_path, 'r:xz') as tar_ref:
+                tar_ref.extractall(path=temp_extract_path)
+
+        progress_callback("Instalando ejecutables...", 90)
+        inner_folder_name = os.listdir(temp_extract_path)[0]
+        bin_content_path = os.path.join(temp_extract_path, inner_folder_name, 'bin')
+        
+        for item_name in ["ffmpeg", "ffprobe"]:
+            if platform.system() == "Windows":
+                item_name += ".exe"
+            
+            source_path = os.path.join(bin_content_path, item_name)
+            dest_path = os.path.join(BIN_DIR, item_name)
+            
+            if os.path.exists(source_path):
+                shutil.move(source_path, dest_path)
+                if platform.system() in ["Linux", "Darwin"]:
+                    os.chmod(dest_path, 0o755)
+
+        with open(FFMPEG_VERSION_FILE, 'w') as f:
+            f.write(version)
+        progress_callback("Instalación de FFmpeg completada.", 95)
+
+    finally:
+        if os.path.exists(download_path): os.remove(download_path)
+        if os.path.exists(temp_extract_path): shutil.rmtree(temp_extract_path)
+
+# --- FUNCIÓN 4: VERIFICACIÓN PRINCIPAL DEL ENTORNO (VERSIÓN RÁPIDA) ---
 def check_environment_status(progress_callback):
-    """
-    Verifica el estado del entorno (dependencias, FFmpeg) sin instalar nada.
-    Devuelve un diccionario con el estado y la información necesaria para la UI.
-    """
+    """Verifica el entorno de forma RÁPIDA y SIN CONEXIÓN A INTERNET para evitar bloqueos."""
     try:
         if not check_and_install_python_dependencies(progress_callback):
-            return {"status": "error", "message": "Fallo crítico: No se pudieron instalar las dependencias de Python."}
-        progress_callback("Actualizando yt-dlp...", 20)
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp[impersonate]", "-q"])
-        progress_callback("yt-dlp está actualizado.", 30)
-        latest_tag, download_url = get_latest_ffmpeg_info(progress_callback)
-        if not latest_tag or not download_url:
-            ffmpeg_path = os.path.join(BIN_DIR, "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg")
-            if os.path.exists(ffmpeg_path):
-                 return {"status": "warning", "message": "No se pudo verificar la última versión de FFmpeg. Se usará la versión local."}
-            else:
-                 return {"status": "error", "message": "No se pudo descargar FFmpeg y no hay una versión local."}
+            return {"status": "error", "message": "Fallo crítico al instalar dependencias de Python."}
+        
+        progress_callback("Verificando FFmpeg local...", 40)
+        
         local_tag = ""
-        ffmpeg_path = os.path.join(BIN_DIR, "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg")
         if os.path.exists(FFMPEG_VERSION_FILE):
             with open(FFMPEG_VERSION_FILE, 'r') as f:
                 local_tag = f.read().strip()
-        return {
-            "status": "success",
-            "ffmpeg_path_exists": os.path.exists(ffmpeg_path),
-            "local_version": local_tag,
-            "latest_version": latest_tag,
-            "download_url": download_url
-        }
+        
+        ffmpeg_exe = "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg"
+        ffmpeg_path_in_bin = os.path.join(BIN_DIR, ffmpeg_exe)
+
+        if os.path.exists(ffmpeg_path_in_bin):
+            return {
+                "status": "success", 
+                "message": "Se usará FFmpeg local.", 
+                "ffmpeg_path_exists": True, 
+                "local_version": local_tag or "Desconocida"
+            }
+        else:
+            return {
+                "status": "warning", 
+                "message": "FFmpeg no encontrado. Usa el botón de mantenimiento para instalarlo.",
+                "ffmpeg_path_exists": False,
+                "local_version": "No instalado"
+            }
+            
     except Exception as e:
         return {"status": "error", "message": f"Error en la verificación del entorno: {e}"}

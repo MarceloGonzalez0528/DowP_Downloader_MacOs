@@ -623,7 +623,7 @@ class MainWindow(ctk.CTk):
             print(f"ERROR: Falló la simulación de descarga: {e}")
             return "No se pudieron obtener los detalles."
 
-    def __init__(self):
+    def __init__(self, ffmpeg_path):
         super().__init__()
         self.is_shutting_down = False
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -698,6 +698,7 @@ class MainWindow(ctk.CTk):
             print(f"ERROR: Fallo al cargar configuración: {e}")
             pass
         self.ffmpeg_processor = FFmpegProcessor()
+        self.ffmpeg_processor.ffmpeg_path = ffmpeg_path # <-- AÑADE ESTA LÍNEA
         self.create_widgets()
         self.run_initial_setup()
         self.original_video_width = 0
@@ -776,7 +777,9 @@ class MainWindow(ctk.CTk):
     def run_initial_setup(self):
         """Lanza la ventana de carga y el proceso de verificación en un hilo."""
         self.loading_window = LoadingWindow(self)
-        self.attributes('-disabled', True)
+        # Solo desactivamos la ventana en Windows, ya que en macOS no es compatible
+        if platform.system() == "Windows":
+            self.attributes('-disabled', True)
         from src.core.setup import check_environment_status
         self.setup_thread = threading.Thread(
             target=lambda: self.on_status_check_complete(check_environment_status(self.update_setup_progress)),
@@ -867,7 +870,8 @@ class MainWindow(ctk.CTk):
         if not self.loading_window.error_state:
             self.loading_window.update_progress("Configuración completada.", 100)
             self.after(800, self.loading_window.destroy) 
-            self.attributes('-disabled', False)
+            if platform.system() == "Windows":
+                  self.attributes('-disabled', False)
             self.lift()
             self.focus_force()
             self.ffmpeg_processor.run_detection_async(self.on_ffmpeg_detection_complete)

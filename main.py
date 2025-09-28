@@ -2,45 +2,46 @@ import sys
 import os
 import subprocess
 import multiprocessing
+import platform
 
+# --- CONSTANTES DEL PROYECTO ---
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-BIN_DIR = os.path.join(PROJECT_ROOT, "bin")
-REQUIREMENTS_FILE = os.path.join(PROJECT_ROOT, "requirements.txt")
 
 def install_dependencies():
-    """Instala las dependencias desde requirements.txt si no están presentes."""
+    """Verifica si las dependencias están instaladas."""
     try:
         import customtkinter
         return True
     except ImportError:
-        print("Dependencia 'customtkinter' no encontrada. Instalando todas las dependencias...")
+        print("Dependencia 'customtkinter' no encontrada. Intentando instalar...")
         try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", REQUIREMENTS_FILE])
-            print("Dependencias instaladas correctamente.")
-            import customtkinter
+            requirements_path = os.path.join(PROJECT_ROOT, "requirements.txt")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_path])
             return True
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            print(f"ERROR: No se pudieron instalar las dependencias desde '{REQUIREMENTS_FILE}'.")
-            print(f"Detalle del error: {e}")
-            try:
-                from tkinter import Tk, Label
-                root = Tk()
-                root.title("Error Crítico")
-                Label(root, text=f"No se pudieron instalar las dependencias.\nAsegúrate de que 'requirements.txt' exista y tengas conexión a internet.\n\nError: {e}", padx=20, pady=20).pack()
-                root.mainloop()
-            except ImportError:
-                pass 
+        except Exception as e:
+            print(f"ERROR CRÍTICO: No se pudieron instalar las dependencias: {e}")
             return False
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
+
+    # Define la ruta exacta de FFmpeg
+    ffmpeg_path = "/opt/homebrew/bin/ffmpeg"
+    
+    # Añade la carpeta de FFmpeg al PATH del sistema por si acaso
+    ffmpeg_dir = os.path.dirname(ffmpeg_path)
+    if ffmpeg_dir not in os.environ['PATH']:
+        os.environ['PATH'] = ffmpeg_dir + os.pathsep + os.environ['PATH']
+    
     if PROJECT_ROOT not in sys.path:
         sys.path.insert(0, PROJECT_ROOT)
+    
     if not install_dependencies():
         sys.exit(1)
-    if os.path.isdir(BIN_DIR) and BIN_DIR not in os.environ['PATH']:
-        os.environ['PATH'] = BIN_DIR + os.pathsep + os.environ['PATH']
+        
     print("Iniciando la aplicación...")
     from src.gui.main_window import MainWindow
-    app = MainWindow()
+    
+    # Aquí está la corrección: le pasamos la ruta a la ventana al crearla
+    app = MainWindow(ffmpeg_path=ffmpeg_path)
     app.mainloop()
